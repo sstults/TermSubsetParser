@@ -1,19 +1,3 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.o19s.solr;
 
 import java.util.Arrays;
@@ -30,22 +14,29 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QParserPlugin;
 import org.apache.solr.search.QueryParsing;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * TODO: Re-do this documentation
+ * This query parser takes a comma-delimited list of terms and constructs
+ * a RegexpQuery. The field it queries is expected to be a comma-separated
+ * list of terms in lexical order (the query terms need not be in order).
  * 
- * Create a field query from the input value, applying text analysis and
- * constructing a phrase query if appropriate. <br>
- * Other parameters: <code>f</code>, the field <br>
- * Example: <code>{!field f=myfield}Foo Bar</code> creates a phrase query with
- * "foo" followed by "bar" if the analyzer for myfield is a text field with an
- * analyzer that splits on whitespace and lowercases terms. This is generally
- * equivalent to the Lucene query parser expression
- * <code>myfield:"Foo Bar"</code>
+ * The result set of the query will be any doc who's full set of terms is a
+ * subset of the query terms. That is to say, a query for "RED,BLUE" will not
+ * match on a document who's field contents are "BLUE,GREEN,RED" but will match
+ * on:
+ * <ul>
+ * <li>"RED"</li>
+ * <li>"BLUE"</li>
+ * <li>or "BLUE,RED"</li>
+ * </ul>  
  */
 public class TermSubsetQParserPlugin extends QParserPlugin {
 	public static String NAME = "termsubset";
+	public static final Logger log = LoggerFactory.getLogger(TermSubsetQParserPlugin.class);
 
+	@SuppressWarnings("rawtypes")
 	public void init(NamedList args) {
 	}
 
@@ -57,7 +48,6 @@ public class TermSubsetQParserPlugin extends QParserPlugin {
 			public Query parse() throws ParseException {
 				String field = localParams.get(QueryParsing.F);
 				String queryText = localParams.get(QueryParsing.V);
-
 				return new RegexpQuery(new Term(field, makeRegexp(queryText)));
 			}
 

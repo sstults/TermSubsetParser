@@ -306,14 +306,6 @@
   	<bool name="httpCaching">false</bool>
   </requestHandler>
 
-  <!-- ******************************************************************** -->
-  <!-- THIS IS THE LINE WE ARE TESTING ************************************ -->
-  <!-- ******************************************************************** -->
-  <queryParser name="termsubset" class="com.o19s.solr.TermSubsetQParserPlugin"/>
-  <!-- ******************************************************************** -->
-  <!-- THAT WAS THE LINE WE ARE TESTING *********************************** -->
-  <!-- ******************************************************************** -->
-
   <searchComponent name="termsComp" class="org.apache.solr.handler.component.TermsComponent"/>
 
   <requestHandler name="/terms" class="org.apache.solr.handler.component.SearchHandler">
@@ -378,5 +370,12 @@
     </processor>
     <processor class="solr.RunUpdateProcessorFactory" />
   </updateRequestProcessorChain>
+
+  <!-- ******************************************************************** -->
+  <!-- ******************************************************************** -->
+  <queryParser name="termsubset" class="com.o19s.solr.TermSubsetQParserPlugin"/>
+  <queryParser name="rgx" class="com.o19s.solr.RegexpQParserPlugin"/>
+  <!-- ******************************************************************** -->
+  <!-- ******************************************************************** -->
 
 </config>

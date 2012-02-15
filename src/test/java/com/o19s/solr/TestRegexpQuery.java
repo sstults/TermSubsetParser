@@ -1,35 +1,12 @@
 package com.o19s.solr;
 
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import java.io.IOException;
 import java.util.Set;
 
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.RandomIndexWriter;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.RegexpQuery;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.SolrTestCaseJ4;
+import org.junit.BeforeClass;
 import org.junit.Ignore;
+import org.junit.Test;
 
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
@@ -37,74 +14,45 @@ import com.google.common.collect.Sets;
 /**
  * Some simple regex tests, mostly converted from contrib's TestRegexQuery.
  * The purpose is to test that a doc hits iff all of its terms are in the
- * regex. That is to say, if the field has a term, it must also be in the regex.
+ * regex. That is to say, if the field has a term, it must also be in the regex,
+ * but if the regex has a term it doesn't necessarily have to be in the field.
  */
-public class TestRegexpQuery extends LuceneTestCase {
-	private IndexSearcher searcher;
-	private IndexReader reader;
-	private Directory directory;
-	private final String FN = "field";
+public class TestRegexpQuery extends SolrTestCaseJ4 {
 
-	@Override
-	public void setUp() throws Exception {
-		super.setUp();
-		directory = newDirectory();
-		RandomIndexWriter writer = new RandomIndexWriter(random, directory);
+	@BeforeClass
+	public static void beforeClass() throws Exception {
+		initCore("solrconfig.xml", "schema.xml");
+		createIndex();
+	}
+
+	public static void createIndex() {
+		int i = 0;
 		String[] classifs = {
-			"RED",
-			"ORANGE",
-			"YELLOW",
-			"YELLOW,GREEN",
-			"YELLOW,BLUE",
-			"RED,ORANGE",
-			"RED,GREEN"
-		};
+				"RED",
+				"ORANGE",
+				"YELLOW",
+				"YELLOW,GREEN",
+				"YELLOW,BLUE",
+				"RED,ORANGE",
+				"RED,GREEN"
+			};
 		for (String classif : classifs) {
-			Document doc = new Document();
-			doc.add(newField(FN, classif, Field.Store.NO, 
-					Field.Index.NOT_ANALYZED));
-			writer.addDocument(doc);
+			assertU(adoc(
+					"id", Integer.toString(i),
+					"sind", classif));
+			i++;
 		}
-		reader = writer.getReader();
-		writer.commit();
-		writer.close();
-		searcher = newSearcher(reader);
-	}
-
-	@Override
-	public void tearDown() throws Exception {
-		searcher.close();
-		reader.close();
-		directory.close();
-		super.tearDown();
-	}
-
-	/**
-	 * Constructs a search term for the FN field
-	 * @param value
-	 * @return search term
-	 */
-	private Term newTerm(String value) {
-		return new Term(FN, value);
-	}
-
-	/**
-	 * Returns the number of query hits from the top five regex matches
-	 * @param regex
-	 * @return number of hits
-	 * @throws IOException
-	 */
-	private int regexQueryNrHits(String regex) throws IOException {
-		RegexpQuery query = new RegexpQuery(newTerm(regex));
-		return searcher.search(query, 5).totalHits;
+		assertU(commit());
 	}
 
 	/**
 	 * Matches: All documents
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegexStar() throws IOException {
-		assertEquals(7, regexQueryNrHits(".*"));
+		assertQ(req("{!rgx f=sind v=.*}"),
+			"//*[@numFound='7']");
 	}
 
 	/** 
@@ -112,8 +60,10 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "ORANGE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testCaveat() throws IOException {
-		assertEquals(6, regexQueryNrHits("~(ORANGE)"));
+		assertQ(req("{!rgx f=sind v=~(ORANGE)}"),
+			"//*[@numFound='6']");
 	}
 
 	/** 
@@ -122,8 +72,10 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * @throws IOException
 	 */
 	@Ignore
+	@Test
 	public void testCaveats() throws IOException {
-		assertEquals(1, regexQueryNrHits("~(((,)?RED)?((,)?YELLOW)?)"));
+		assertQ(req("{!rgx f=sind v=~(((,)?RED)?((,)?YELLOW)?)}"),
+			"//*[@numFound='1']");
 	}
 
 	/** 
@@ -131,8 +83,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "RED GREEN", "RED ORANGE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testMatchSingleTerm() throws IOException {
-		assertEquals(1, regexQueryNrHits(makeRegexp("RED")));
+		assertQuery(1, "RED");
 	}
 
 	/** 
@@ -140,8 +93,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "RED ORANGE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegex2() throws IOException {
-		assertEquals(1, regexQueryNrHits(makeRegexp("ORANGE")));
+		assertQuery(1, "ORANGE");
 	}
 
 	/** 
@@ -149,8 +103,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "YELLOW GREEN", "YELLOW BLUE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegex3() throws IOException {
-		assertEquals(1, regexQueryNrHits(makeRegexp("YELLOW")));
+		assertQuery(1, "YELLOW");
 	}
 
 	/** 
@@ -158,8 +113,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "YELLOW BLUE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegex5() throws IOException {
-		assertEquals(0, regexQueryNrHits(makeRegexp("BLUE")));
+		assertQuery(0, makeRegexp("BLUE"));
 	}
 
 	/** 
@@ -167,8 +123,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "RED GREEN"
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegex6() throws IOException {
-		assertEquals(3, regexQueryNrHits(makeRegexp("RED,ORANGE")));
+		assertQuery(3, makeRegexp("RED,ORANGE"));
 	}
 
 	/** 
@@ -176,8 +133,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "YELLOW GREEN", "YELLOW BLUE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegex7() throws IOException {
-		assertEquals(1, regexQueryNrHits(makeRegexp("YELLOW,INDIGO")));
+		assertQuery(1, makeRegexp("YELLOW,INDIGO"));
 	}
 
 	/** 
@@ -185,8 +143,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "YELLOW GREEN", "YELLOW BLUE", "RED ORANGE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegex8() throws IOException {
-		assertEquals(2, regexQueryNrHits(makeRegexp("YELLOW,ORANGE")));
+		assertQuery(2, makeRegexp("YELLOW,ORANGE"));
 	}
 
 	/** 
@@ -194,8 +153,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "YELLOW GREEN", "YELLOW BLUE"
 	 * @throws IOException
 	 */
+	@Test
 	public void testRegex9() throws IOException {
-		assertEquals(1, regexQueryNrHits(makeRegexp("YELLOW,INDIGO,VIOLET")));
+		assertQuery(1, makeRegexp("YELLOW,INDIGO,VIOLET"));
 	}
 
 	/** 
@@ -203,8 +163,9 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * Misses: "YELLOW GREEN"
 	 * @throws IOException
 	 */
+	@Test
 	public void testComplexMultiple() throws IOException {
-		assertEquals(2, regexQueryNrHits(makeRegexp("YELLOW,INDIGO,VIOLET,BLUE")));
+		assertQuery(2, makeRegexp("YELLOW,INDIGO,VIOLET,BLUE"));
 	}
 
 	/**
@@ -212,6 +173,8 @@ public class TestRegexpQuery extends LuceneTestCase {
 	 * of sets returned should be 2^n, where n is the number
 	 * of colors passed in.
 	 */
+	@Test
+	@Ignore
 	public void testMakePowerSet() {
 		String colors = "RED";
 		assertEquals((int)Math.pow(2, 1),makePowerSet(colors).size());
@@ -227,6 +190,32 @@ public class TestRegexpQuery extends LuceneTestCase {
 		assertEquals((int)Math.pow(2, 6),makePowerSet(colors).size());
 		colors = "RED,ORANGE,YELLOW,GREEN,BLUE,INDIGO,VIOLET";
 		assertEquals((int)Math.pow(2, 7),makePowerSet(colors).size());
+	}
+	
+	/**
+	 * Stress test 2^14 queries or 16,384
+	 */
+	@Test
+	@Ignore
+	public void testPowerSets() {
+		String colors = "RED,ORANGE,YELLOW,GREEN,BLUE,INDIGO,VIOLET," +
+			"one,two,three,four,five,six,seven";
+		Set<Set<String>> powerSet = makePowerSet(colors);
+		StringBuffer colorBuffer = null;
+		String colorSet = null;
+		for (Set<String> set : powerSet) {
+			colorBuffer = new StringBuffer();
+			for (String color : set) {
+				colorBuffer.append(color + ",");
+			}
+			if (colorBuffer.length() > 0) {
+				colorSet = colorBuffer.toString();
+				// delete the last comma
+				colorSet.substring(0, colorSet.length());
+				assertQ(req("{!rgx f=sind v="+colorSet+"}"),
+					"//*");
+			}
+		}
 	}
 	
 	/**
@@ -250,4 +239,16 @@ public class TestRegexpQuery extends LuceneTestCase {
 	private Set<Set<String>> makePowerSet(String tags) {
 		return Sets.powerSet(ImmutableSortedSet.copyOf(tags.split(",")));
 	}
+
+	/**
+	 * Helper for the assertQ method
+	 * @param i Number of docs expected
+	 * @param q The query
+	 */
+	private void assertQuery(int i, String q) {
+		String query = "{!rgx f=sind v=" + q + "}";
+		String found = "//*[@numFound='" + i + "']";
+		assertQ(req(query), found);
+	}
+	
 }
