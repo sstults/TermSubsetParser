@@ -25,7 +25,6 @@ public class TestTermSubsetQParserPlugin extends SolrTestCaseJ4 {
 
 	@Test
 	public void testOneValue() {
-		// should generate a phrase of "now cow" and match only one doc
 		assertQ(req("{!termsubset f=sind v=RED}"),
 				"//*[@numFound='1']");
 		assertQ(req("{!termsubset f=sind v=ORANGE}"),
